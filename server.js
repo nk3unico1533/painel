@@ -1,45 +1,36 @@
-// server.js
 import express from "express";
-import fetch from "node-fetch";
 import cors from "cors";
+import fetch from "node-fetch";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
 app.use(cors());
-
-app.get("/api/consulta", async (req, res) => {
-  try {
-    const { tipo, valor } = req.query;
-    if (!tipo || !valor) return res.status(400).json({ erro: "Parâmetros inválidos" });
-
-    let url;
-    switch (tipo) {
-      case "rg":
-        url = `https://apis-brasil.shop/apis/apirgcadsus.php?rg=${valor}`;
-        break;
-      case "cpf":
-        url = `https://apis-brasil.shop/apis/apiserasacpf2025.php?cpf=${valor}`;
-        break;
-      case "telefone":
-        url = `https://apis-brasil.shop/apis/apitelcredilink2025.php?telefone=${valor}`;
-        break;
-      default:
-        return res.status(400).json({ erro: "Tipo inválido" });
-    }
-
-    const resposta = await fetch(url);
-    const dados = await resposta.text(); // pode ser HTML ou JSON
-    res.send(dados);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ erro: "Erro interno do servidor" });
-  }
-});
-
 app.disable("x-powered-by");
 app.use((req, res, next) => {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   next();
-app.listen(PORT, () => console.log(`🚀 Servidor rodando em http://localhost:${PORT}`));
+});
+
+app.get("/api/consulta", async (req, res) => {
+  const { tipo, valor } = req.query;
+  if (!tipo || !valor) return res.status(400).json({ erro: "Faltando parâmetros." });
+
+  const urls = {
+    rg: `https://apis-brasil.shop/apis/apirgcadsus.php?rg=${valor}`,
+    cpf: `https://apis-brasil.shop/apis/apiserasacpf2025.php?cpf=${valor}`,
+    telefone: `https://apis-brasil.shop/apis/apitelcredilink2025.php?telefone=${valor}`,
+  };
+  const url = urls[tipo];
+  if (!url) return res.status(400).json({ erro: "Tipo inválido." });
+
+  try {
+    const r = await fetch(url);
+    const text = await r.text();
+    res.send(text);
+  } catch (e) {
+    res.status(500).json({ erro: "Erro ao buscar API." });
+  }
+});
+
+const port = process.env.PORT || 10000;
+app.listen(port, () => console.log(`Servidor rodando na porta ${port}`));
