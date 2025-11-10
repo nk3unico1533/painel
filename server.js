@@ -3,8 +3,8 @@ import cors from "cors";
 import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
-import chalk from "chalk";
 import { fileURLToPath } from "url";
+import chalk from "chalk";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,16 +14,14 @@ const PORT = process.env.PORT || 3000;
 const HIST_FILE = path.join(__dirname, "historico.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
 
-// Garante que exista pasta public
-if (!fs.existsSync(PUBLIC_DIR)) fs.mkdirSync(PUBLIC_DIR);
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(PUBLIC_DIR)); // 🔹 Agora o /admin funciona
 
-// Cria histórico se não existir
+// 🔹 Servir arquivos estáticos (admin.html, dashboard.html, etc)
+app.use(express.static(PUBLIC_DIR));
+
+// Cria o histórico se não existir
 if (!fs.existsSync(HIST_FILE)) fs.writeFileSync(HIST_FILE, "[]", "utf-8");
 
 let contadores = { basica: 0, datasus: 0, full: 0, telefone: 0 };
@@ -44,12 +42,12 @@ app.get("/", (req, res) => {
   res.json({ status: "API Proxy rodando com sucesso 🚀", contadores });
 });
 
-// 🔹 /admin serve o arquivo admin.html dentro da pasta public
+// 🔹 Admin painel
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "admin.html"));
 });
 
-// 🔹 Login e dashboard
+// 🔹 Login simples
 const ADMIN_PASSWORD = process.env.ADMIN_PASS || "darkaurora123";
 
 app.post("/admin-login", (req, res) => {
@@ -61,11 +59,12 @@ app.post("/admin-login", (req, res) => {
   }
 });
 
+// 🔹 Dashboard (arquivo dentro de /public)
 app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "dashboard.html"));
 });
 
-// 🔹 API proxy
+// 🔹 Proxy das consultas
 app.get("/consulta", async (req, res) => {
   const { tipo, valor } = req.query;
   const apis = {
@@ -100,7 +99,6 @@ app.get("/historico", (req, res) => {
   res.json(JSON.parse(fs.readFileSync(HIST_FILE, "utf-8")));
 });
 
-// 🔹 Inicialização
 app.listen(PORT, () => {
-  console.log(chalk.bgMagentaBright(`🚀 Dark Aurora Private By Nk rodando na porta ${PORT}`));
+  console.log(chalk.bgMagentaBright(`🚀 Dark Aurora Private rodando na porta ${PORT}`));
 });
