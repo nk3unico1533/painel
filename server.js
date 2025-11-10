@@ -1,4 +1,3 @@
-// server.js
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
@@ -7,7 +6,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Rota base (teste)
+// Histórico simples em memória
+let historico = [];
+
+// Rota base
 app.get("/", (req, res) => {
   res.json({ status: "API Proxy rodando com sucesso 🚀" });
 });
@@ -15,12 +17,8 @@ app.get("/", (req, res) => {
 // Rota de consulta
 app.get("/consulta", async (req, res) => {
   const { tipo, valor } = req.query;
+  if (!tipo || !valor) return res.status(400).json({ erro: "Parâmetros tipo e valor são obrigatórios." });
 
-  if (!tipo || !valor) {
-    return res.status(400).json({ erro: "Parâmetros tipo e valor são obrigatórios." });
-  }
-
-  // Mapeamento das APIs originais
   let url = "";
   if (tipo === "basica") url = `https://apis-brasil.shop/apis/apirgcadsus.php?rg=${valor}`;
   if (tipo === "datasus") url = `https://apis-brasil.shop/apis/apicpfdatasus.php?cpf=${valor}`;
@@ -29,20 +27,38 @@ app.get("/consulta", async (req, res) => {
 
   try {
     const response = await fetch(url);
-    const text = await response.text();
+    let text = await response.text();
 
-    // Tenta converter o retorno em JSON, se falhar retorna o texto cru
+    // Remove as mensagens "Aviso: Sou o dono desta API..." antes do JSON
+    text = text.replace(/Aviso:[\s\S]*?\[/, "["); // remove avisos antes de [
+    text = text.replace(/Aviso:[\s\S]*?\{/, "{"); // remove avisos antes de {
+    text = text.trim();
+
+    let json;
     try {
-      const json = JSON.parse(text);
-      res.json(json);
-    } catch {
-      res.json({ raw: text });
+      json = JSON.parse(text);
+    } catch (e) {
+      // Se não for JSON válido, retorna o texto cru
+      return res.json({ raw: text });
     }
 
+    // Salva no histórico
+    historico.unshift({
+      tipo,
+      valor,
+      data: new Date().toLocaleString("pt-BR"),
+    });
+
+    res.json({ resultado: json, historico });
   } catch (e) {
     res.status(500).json({ erro: e.message });
   }
 });
 
+// Rota para obter histórico
+app.get("/historico", (req, res) => {
+  res.json(historico);
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Servidor rodando em http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`✅ Servidor rodando na porta ${PORT}`));
