@@ -37,4 +37,9 @@ app.get("/api/consulta", async (req, res) => {
   }
 });
 
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  next();
 app.listen(PORT, () => console.log(`🚀 Servidor rodando em http://localhost:${PORT}`));
