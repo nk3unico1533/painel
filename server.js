@@ -11,20 +11,23 @@ app.get("/api/consulta", async (req, res) => {
 
   try {
     let url;
-    if (tipo === "rg") url = `https://apis-brasil.shop/apis/apirgcadsus.php?rg=${valor}`;
-    else if (tipo === "cpf") url = `https://apis-brasil.shop/apis/apiserasacpf2025.php?cpf=${valor}`;
-    else if (tipo === "telefone") url = `https://apis-brasil.shop/apis/apitelcredilink2025.php?telefone=${valor}`;
+    if (tipo === "rg")
+      url = `https://apis-brasil.shop/apis/apirgcadsus.php?rg=${valor}`;
+    else if (tipo === "cpf")
+      url = `https://apis-brasil.shop/apis/apiserasacpf2025.php?cpf=${valor}`;
+    else if (tipo === "telefone")
+      url = `https://apis-brasil.shop/apis/apitelcredilink2025.php?telefone=${valor}`;
     else return res.status(400).json({ erro: "Tipo inválido" });
 
     const response = await fetch(url);
-    const data = await response.text();
+    const text = await response.text();
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
 
     try {
-      res.json(JSON.parse(data));
+      res.json(JSON.parse(text));
     } catch {
-      res.send(data);
+      res.send(text);
     }
   } catch (error) {
     console.error(error);
@@ -33,4 +36,6 @@ app.get("/api/consulta", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Servidor rodando na porta ${PORT}`));
+app.listen(PORT, () =>
+  console.log(`🚀 Servidor rodando na porta ${PORT}`)
+);
