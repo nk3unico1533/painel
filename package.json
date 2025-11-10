@@ -1,6 +1,7 @@
 {
-  "name": "dark-aurora-proxy",
-  "version": "1.0.0",
+  "name": "painel",
+  "version": "1.8.0",
+  "description": "Servidor proxy oficial do Dark Aurora Painel — by nk, com CORS liberado e integração total com APIs externas (CPF, RG, Telefone).",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -10,5 +11,10 @@
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "node-fetch": "^3.3.2"
-  }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "nk",
+  "license": "MIT"
 }
