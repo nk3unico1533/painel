@@ -1,9 +1,8 @@
 {
-  "name": "painel-consulta",
+  "name": "darkaurora-buscas",
   "version": "1.0.0",
-  "description": "Servidor proxy para consultas RG, CPF e Telefone",
-  "main": "server.js",
   "type": "module",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
