@@ -1,4 +1,4 @@
-// 🌌 Dark Aurora Proxy v2.2 — Modo Antifalha
+// 🌌 Dark Aurora Proxy v2.3 — Integração com apis-brasil.shop
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
@@ -7,6 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// 🔹 Rota principal (proxy das consultas)
 app.get("/", async (req, res) => {
   const { cpf, rg, telefone, endpoint } = req.query;
 
@@ -16,52 +17,57 @@ app.get("/", async (req, res) => {
 
   let url;
 
-  // 🔹 Rotas conhecidas
+  // 🔹 Define a URL conforme o endpoint solicitado
   switch (endpoint) {
     case "apiserasacpf2025":
-      url = `https://apiserasacpf2025.onrender.com/?cpf=${cpf}`;
+      url = `https://apis-brasil.shop/apis/apiserasacpf2025.php?cpf=${cpf}`;
       break;
+
     case "apirgcadsus":
-      url = `https://apirgcadsus.onrender.com/?rg=${rg}`;
+      url = `https://apis-brasil.shop/apis/apirgcadsus.php?rg=${rg}`;
       break;
+
     case "apitelcredilink2025":
-      url = `https://apitelcredilink2025.onrender.com/?telefone=${telefone}`;
+      url = `https://apis-brasil.shop/apis/apitelcredilink2025.php?telefone=${telefone}`;
       break;
+
     default:
       return res.status(400).json({ erro: "Endpoint inválido." });
   }
 
   try {
+    // Faz requisição à API externa
     const resposta = await fetch(url);
     const texto = await resposta.text();
 
-    // 🔹 Tenta fazer parse do JSON
+    // 🔹 Tenta interpretar o retorno como JSON
     try {
       const json = JSON.parse(texto);
       return res.json(json);
     } catch {
-      // 🔹 Retorna JSON válido mesmo que a API devolva texto/erro
+      // 🔹 Retorna JSON válido mesmo se vier texto puro
       return res.json({
         status: "erro",
-        mensagem: "A API de destino não retornou JSON válido.",
-        retorno_original: texto.substring(0, 300),
+        mensagem: "A API retornou texto em vez de JSON.",
+        retorno_original: texto.substring(0, 500),
       });
     }
   } catch (erro) {
+    // 🔹 Captura erros de rede ou requisição
     return res.status(500).json({
-      erro: "Erro interno ao consultar API externa.",
+      erro: "Erro interno ao consultar a API externa.",
       detalhe: erro.message,
     });
   }
 });
 
-// Mensagem padrão
+// 🔹 Página padrão (teste rápido no navegador)
 app.get("*", (req, res) => {
   res.send("🌌 Dark Aurora Proxy ativo com CORS liberado!");
 });
 
-// Porta Render
+// 🔹 Porta Render
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () =>
-  console.log(`✅ Dark Aurora Proxy v2.2 rodando na porta ${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`✅ Dark Aurora Proxy v2.3 rodando na porta ${PORT}`);
+});
