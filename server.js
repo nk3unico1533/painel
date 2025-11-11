@@ -1,64 +1,62 @@
-// 🌌 Dark Aurora Proxy v2.3 — by nk
-// Proxy seguro e compatível com as APIs apis-brasil.shop
-
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
+const PORT = process.env.PORT || 10000;
+
 app.use(cors());
 app.use(express.json());
 
-// 🔹 Endpoint principal
+// URLs das APIs reais
+const apis = {
+  apiserasacpf2025: "https://apis-brasil.shop/apis/apiserasacpf2025.php",
+  apirgcadsus: "https://apis-brasil.shop/apis/apirgcadsus.php",
+  apitelcredilink2025: "https://apis-brasil.shop/apis/apitelcredilink2025.php",
+};
+
+// Função para escolher a API conforme o parâmetro "endpoint"
 app.get("/", async (req, res) => {
-  const { cpf, rg, telefone, endpoint } = req.query;
-
-  if (!endpoint) {
-    return res.status(400).json({ erro: "Endpoint não especificado." });
-  }
-
-  let url;
-
-  switch (endpoint) {
-    case "apiserasacpf2025":
-      url = `https://apis-brasil.shop/apis/apiserasacpf2025.php?cpf=${cpf}`;
-      break;
-    case "apirgcadsus":
-      url = `https://apis-brasil.shop/apis/apirgcadsus.php?rg=${rg}`;
-      break;
-    case "apitelcredilink2025":
-      url = `https://apis-brasil.shop/apis/apitelcredilink2025.php?telefone=${telefone}`;
-      break;
-    default:
-      return res.status(400).json({ erro: "Endpoint inválido." });
-  }
-
   try {
-    const resposta = await fetch(url);
-    const texto = await resposta.text();
+    const { cpf, rg, telefone, endpoint } = req.query;
 
+    // Define a URL de destino
+    const baseUrl = apis[endpoint];
+    if (!baseUrl) {
+      return res.status(400).json({ erro: "Endpoint inválido ou não especificado." });
+    }
+
+    // Monta a URL completa de acordo com o tipo de consulta
+    let targetUrl = baseUrl;
+    if (cpf) targetUrl += `?cpf=${cpf}`;
+    else if (rg) targetUrl += `?rg=${rg}`;
+    else if (telefone) targetUrl += `?telefone=${telefone}`;
+    else return res.status(400).json({ erro: "Parâmetro de consulta ausente." });
+
+    // Faz a requisição à API original
+    const response = await fetch(targetUrl);
+
+    // Pega o texto original (para caso não seja JSON puro)
+    const text = await response.text();
+
+    // Tenta converter para JSON
     try {
-      const json = JSON.parse(texto);
+      const json = JSON.parse(text);
       return res.json(json);
     } catch {
-      return res.json({
+      console.error("⚠️ Retorno não JSON:", text);
+      return res.status(200).json({
         status: "erro",
-        mensagem: "A API retornou texto em vez de JSON.",
-        retorno_original: texto.substring(0, 400),
+        mensagem: "A API de destino retornou texto não JSON.",
+        retorno_original: text,
       });
     }
-  } catch (erro) {
-    return res.status(500).json({
-      erro: "Erro interno ao consultar a API externa.",
-      detalhe: erro.message,
-    });
+  } catch (err) {
+    console.error("❌ Erro no proxy:", err);
+    return res.status(500).json({ erro: "Erro interno no servidor proxy." });
   }
 });
 
-// 🔹 Página padrão
-app.get("*", (req, res) => {
-  res.send("🌌 Dark Aurora Proxy ativo com CORS liberado!");
+app.listen(PORT, () => {
+  console.log(`✅ Servidor proxy rodando na porta ${PORT}`);
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Proxy ativo na porta ${PORT}`));
