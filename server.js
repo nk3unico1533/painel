@@ -3,56 +3,74 @@ import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-
-// 🟣 Libera CORS para todas as origens (frontend InfinityFree, Kesug, etc.)
 app.use(cors());
 app.use(express.json());
 
-// 🔮 Mensagem de status do servidor
-app.get("/", (req, res) => {
-  res.send("🌌 Dark Aurora Proxy ativo com CORS liberado!");
+const PORT = process.env.PORT || 3000;
+
+// Lista dos endpoints permitidos
+const ENDPOINTS = {
+  apirgcadsus: "https://apirgcadsus.onrender.com",
+  apiserasacpf2025: "https://apiserasacpf2025.onrender.com",
+  apitelcredilink2025: "https://apitelcredilink2025.onrender.com"
+};
+
+// Middleware para log básico
+app.use((req, res, next) => {
+  console.log(`🌐 [${new Date().toISOString()}] Nova requisição: ${req.url}`);
+  next();
 });
 
-// 🔷 Função genérica para fazer proxy das requisições
-async function proxyRequest(req, res, targetUrl) {
+// Rota principal proxy
+app.get("/", async (req, res) => {
   try {
-    const response = await fetch(targetUrl);
-    const contentType = response.headers.get("content-type");
-    res.setHeader("Content-Type", contentType || "application/json");
-    const body = await response.text();
-    res.status(response.status).send(body);
-  } catch (error) {
-    console.error("Erro ao fazer proxy:", error);
-    res.status(500).json({ erro: "Erro interno ao consultar a API." });
+    const { cpf, rg, tel, endpoint } = req.query;
+
+    if (!endpoint || !ENDPOINTS[endpoint]) {
+      return res.status(400).json({ erro: "❌ Endpoint inválido ou não especificado." });
+    }
+
+    const baseURL = ENDPOINTS[endpoint];
+    let targetURL = baseURL;
+
+    // Montagem dinâmica da URL destino
+    if (cpf) targetURL += `/?cpf=${cpf}`;
+    else if (rg) targetURL += `/?rg=${rg}`;
+    else if (tel) targetURL += `/?tel=${tel}`;
+    else return res.status(400).json({ erro: "❌ Parâmetro de consulta ausente (cpf, rg ou tel)." });
+
+    console.log(`🚀 Encaminhando para: ${targetURL}`);
+
+    // Faz a requisição ao endpoint real
+    const resposta = await fetch(targetURL);
+    const texto = await resposta.text();
+
+    // Se a resposta já for JSON válido → retorna direto
+    try {
+      const json = JSON.parse(texto);
+      return res.json(json);
+    } catch {
+      // Se não for JSON, tenta achar JSON dentro do texto
+      const match = texto.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          const json = JSON.parse(match[0]);
+          return res.json(json);
+        } catch {
+          return res.status(500).json({ erro: "⚠️ Falha ao processar JSON parcial." });
+        }
+      }
+      // Se realmente não tiver JSON → retorna mensagem padronizada
+      return res.status(502).json({ erro: "⚠️ Nenhum dado JSON válido retornado pela API destino.", retorno: texto });
+    }
+
+  } catch (err) {
+    console.error("❌ Erro interno:", err);
+    res.status(500).json({ erro: "❌ Erro interno no servidor proxy.", detalhes: err.message });
   }
-}
-
-// 🪪 Consulta RG (CadSUS)
-app.get("/apirgcadsus", async (req, res) => {
-  const { rg } = req.query;
-  if (!rg) return res.status(400).json({ erro: "RG não informado." });
-  const url = `https://apis-brasil.shop/apis/apirgcadsus.php?rg=${rg}`;
-  await proxyRequest(req, res, url);
 });
 
-// 🧾 Consulta CPF (Serasa 2025)
-app.get("/apiserasacpf2025", async (req, res) => {
-  const { cpf } = req.query;
-  if (!cpf) return res.status(400).json({ erro: "CPF não informado." });
-  const url = `https://apis-brasil.shop/apis/apiserasacpf2025.php?cpf=${cpf}`;
-  await proxyRequest(req, res, url);
-});
-
-// 📞 Consulta Telefone (Credilink 2025)
-app.get("/apitelcredilink2025", async (req, res) => {
-  const { telefone } = req.query;
-  if (!telefone) return res.status(400).json({ erro: "Telefone não informado." });
-  const url = `https://apis-brasil.shop/apis/apitelcredilink2025.php?telefone=${telefone}`;
-  await proxyRequest(req, res, url);
-});
-
-// 🚀 Inicializa o servidor
+// Inicializa o servidor
 app.listen(PORT, () => {
-  console.log(`✅ Servidor Dark Aurora Proxy rodando na porta ${PORT}`);
+  console.log(`✅ Dark Aurora Proxy ativo na porta ${PORT}`);
 });
