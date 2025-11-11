@@ -1,79 +1,64 @@
+// 🌌 Dark Aurora Proxy Server — by nk
+// Versão estável compatível com painel-9ycj.onrender.com
+
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
+const PORT = process.env.PORT || 10000;
+
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-
-// Endpoints oficiais
-const ENDPOINTS = {
-  apirgcadsus: "https://apirgcadsus.onrender.com",
-  apiserasacpf2025: "https://apiserasacpf2025.onrender.com",
-  apitelcredilink2025: "https://apitelcredilink2025.onrender.com"
-};
-
-// Middleware: logs e headers anti-cache
-app.use((req, res, next) => {
-  res.set("Cache-Control", "no-store");
-  console.log(`🌌 Dark Aurora Proxy: nova requisição → ${req.url}`);
-  next();
-});
-
-// Rota principal
+// ✅ Rota principal com status
 app.get("/", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  const { cpf, rg, telefone, endpoint } = req.query;
+
+  // 🔹 Caso acessem sem parâmetros, mostra status padrão
+  if (!endpoint) {
+    return res.send("🌌 Dark Aurora Proxy ativo com CORS liberado!");
+  }
+
+  let url;
+
+  // 🔀 Monta a URL de destino conforme o endpoint informado
+  switch (endpoint) {
+    case "apiserasacpf2025":
+      url = `https://apiserasacpf2025.onrender.com/?cpf=${cpf}`;
+      break;
+    case "apirgcadsus":
+      url = `https://apirgcadsus.onrender.com/?rg=${rg}`;
+      break;
+    case "apitelcredilink2025":
+      url = `https://apitelcredilink2025.onrender.com/?telefone=${telefone}`;
+      break;
+    default:
+      return res.status(400).json({ erro: "❌ Endpoint inválido." });
+  }
+
   try {
-    const { cpf, rg, tel, endpoint } = req.query;
-
-    if (!endpoint || !ENDPOINTS[endpoint]) {
-      return res.status(400).json({ erro: "❌ Endpoint inválido ou ausente." });
-    }
-
-    const baseURL = ENDPOINTS[endpoint];
-    let targetURL = baseURL;
-
-    if (cpf) targetURL += `/?cpf=${cpf}`;
-    else if (rg) targetURL += `/?rg=${rg}`;
-    else if (tel) targetURL += `/?tel=${tel}`;
-    else return res.status(400).json({ erro: "❌ Parâmetro de consulta ausente (cpf, rg ou tel)." });
-
-    console.log(`🚀 Proxy encaminhando para → ${targetURL}`);
-
-    const resposta = await fetch(targetURL);
+    // 🛰 Faz o fetch para a API real
+    const resposta = await fetch(url);
     const texto = await resposta.text();
 
-    // Tenta converter diretamente em JSON
+    // 🧩 Tenta interpretar como JSON
     try {
       const json = JSON.parse(texto);
-      return res.json(json);
+      res.json(json);
     } catch {
-      // Caso o retorno seja texto com JSON embutido
-      const match = texto.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          const json = JSON.parse(match[0]);
-          return res.json(json);
-        } catch {
-          console.log("⚠️ JSON parcial corrompido.");
-          return res.status(500).json({ erro: "⚠️ JSON inválido retornado pela API destino." });
-        }
-      }
-      // Nenhum JSON encontrado
-      console.log("⚠️ Nenhum dado JSON retornado pela API destino.");
-      return res.status(502).json({
-        erro: "⚠️ Nenhum dado JSON válido retornado pela API destino.",
-        retorno: texto
-      });
+      console.log("⚠️ Resposta não JSON recebida:", texto);
+      res.status(200).send(texto);
     }
-
-  } catch (err) {
-    console.error("❌ Erro interno no proxy:", err);
-    res.status(500).json({ erro: "❌ Erro interno no servidor proxy.", detalhes: err.message });
+  } catch (erro) {
+    console.error("🚨 Erro ao buscar API:", erro);
+    res.status(500).json({ erro: "Erro interno ao consultar API externa." });
   }
 });
 
+// 🚀 Inicializa o servidor
 app.listen(PORT, () => {
-  console.log(`✅ Dark Aurora Proxy ativo na porta ${PORT}`);
+  console.log(`🌌 Dark Aurora Proxy rodando na porta ${PORT}`);
 });
