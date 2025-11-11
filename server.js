@@ -1,5 +1,5 @@
 // 🌌 Dark Aurora Proxy Server — by nk
-// Versão estável compatível com painel-9ycj.onrender.com
+// Versão com CORS 100% liberado e compatível com o painel
 
 import express from "express";
 import fetch from "node-fetch";
@@ -8,23 +8,30 @@ import cors from "cors";
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-app.use(cors());
+// 🟣 Libera CORS para qualquer origem (frontend, InfinityFree, Kesug etc.)
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// ✅ Rota principal com status
+// 🔧 Responde requisições OPTIONS (preflight do navegador)
+app.options("*", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.sendStatus(200);
+});
+
+// ✅ Rota principal com proxy inteligente
 app.get("/", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
 
   const { cpf, rg, telefone, endpoint } = req.query;
 
-  // 🔹 Caso acessem sem parâmetros, mostra status padrão
+  // 🔹 Status padrão se não houver endpoint
   if (!endpoint) {
     return res.send("🌌 Dark Aurora Proxy ativo com CORS liberado!");
   }
 
   let url;
-
-  // 🔀 Monta a URL de destino conforme o endpoint informado
   switch (endpoint) {
     case "apiserasacpf2025":
       url = `https://apiserasacpf2025.onrender.com/?cpf=${cpf}`;
@@ -40,11 +47,9 @@ app.get("/", async (req, res) => {
   }
 
   try {
-    // 🛰 Faz o fetch para a API real
     const resposta = await fetch(url);
     const texto = await resposta.text();
 
-    // 🧩 Tenta interpretar como JSON
     try {
       const json = JSON.parse(texto);
       res.json(json);
@@ -60,5 +65,5 @@ app.get("/", async (req, res) => {
 
 // 🚀 Inicializa o servidor
 app.listen(PORT, () => {
-  console.log(`🌌 Dark Aurora Proxy rodando na porta ${PORT}`);
+  console.log(`🌌 Dark Aurora Proxy rodando com CORS liberado — Porta ${PORT}`);
 });
