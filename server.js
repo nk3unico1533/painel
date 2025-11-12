@@ -8,15 +8,35 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Função auxiliar: garante que a resposta seja sempre JSON válido
+// 🟣 Função auxiliar: formata objetos aninhados para texto legível
+function formatarObjeto(obj) {
+  if (obj === null || obj === undefined) return "";
+  if (typeof obj === "string") return obj;
+  if (Array.isArray(obj)) return obj.map(formatarObjeto).join(", ");
+  if (typeof obj === "object") {
+    return Object.entries(obj)
+      .map(([chave, valor]) => `${chave.toUpperCase()}: ${formatarObjeto(valor)}`)
+      .join(" | ");
+  }
+  return String(obj);
+}
+
+// 🟣 Função auxiliar: tenta converter resposta em JSON, ou formata texto bruto
 async function tratarResposta(resposta) {
   const texto = await resposta.text();
-
   try {
-    // Tenta converter direto se já for JSON
-    return JSON.parse(texto);
+    const json = JSON.parse(texto);
+
+    // 🔹 Se for objeto válido, expande para texto legível
+    const formatado = formatarObjeto(json);
+
+    return {
+      sucesso: true,
+      mensagem: "Consulta concluída",
+      dados: formatado,
+    };
   } catch {
-    // Se não for JSON, cria estrutura padronizada
+    // 🔹 Se não for JSON, retorna mensagem padronizada
     return {
       sucesso: false,
       mensagem: "Retorno inválido",
