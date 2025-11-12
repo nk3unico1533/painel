@@ -5,23 +5,22 @@ import cors from "cors";
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// ✅ Habilita CORS
+// ✅ Ativa CORS
 app.use(cors());
 app.use(express.json());
 
-// ✅ Logs de requisições
+// ✅ Log básico
 app.use((req, res, next) => {
-  console.log(`📥 Nova requisição recebida: ${req.method} ${req.url}`);
+  console.log(`📥 ${req.method} ${req.url}`);
   next();
 });
 
-// ✅ Função auxiliar para tratar respostas que não são JSON
+// ✅ Função segura para interpretar respostas da API
 async function parseJSONSafe(response) {
   try {
     return await response.json();
-  } catch (e) {
+  } catch {
     const text = await response.text();
-    // Verifica se o conteúdo é HTML de erro 1033 ou similar
     if (text.includes("1033") || text.includes("<html")) {
       return {
         status: "erro",
@@ -37,40 +36,14 @@ async function parseJSONSafe(response) {
   }
 }
 
-// ✅ Rota principal de proxy universal
-app.get("/", async (req, res) => {
-  const { cpf, valor, endpoint } = req.query;
-
-  if (!endpoint) {
-    return res.status(400).json({
-      status: "erro",
-      mensagem: "Parâmetro 'endpoint' é obrigatório.",
-    });
-  }
-
-  // 🔗 Monta URL da API real
-  let urlDestino;
-  if (cpf) {
-    urlDestino = `https://api-publica-externa.com/${endpoint}?cpf=${cpf}`;
-  } else if (valor) {
-    urlDestino = `https://api-publica-externa.com/${endpoint}?valor=${valor}`;
-  } else {
-    return res.status(400).json({
-      status: "erro",
-      mensagem: "Parâmetro 'cpf' ou 'valor' é obrigatório.",
-    });
-  }
-
-  console.log("🔹 Chamando endpoint:", urlDestino);
-
+// 🔹 Função genérica de proxy para APIs externas
+async function consultarAPI(url, res) {
   try {
-    const resposta = await fetch(urlDestino, {
-      headers: {
-        "User-Agent": "DarkAuroraProxy/1.0",
-      },
-      timeout: 20000, // 20 segundos
+    console.log("🔹 Consultando:", url);
+    const resposta = await fetch(url, {
+      headers: { "User-Agent": "DarkAuroraProxy/1.0" },
+      timeout: 20000,
     });
-
     const data = await parseJSONSafe(resposta);
     res.json(data);
   } catch (erro) {
@@ -81,14 +54,60 @@ app.get("/", async (req, res) => {
       detalhe: erro.message,
     });
   }
+}
+
+// 🧩 ROTAS PERSONALIZADAS — suas APIs do Render
+
+// 1️⃣ RG CAD SUS
+app.get("/apirgcadsus", async (req, res) => {
+  const { valor } = req.query;
+  if (!valor) return res.status(400).json({ status: "erro", mensagem: "Parâmetro 'valor' é obrigatório." });
+  const url = `https://apirgcadsus.vercel.app/api?valor=${valor}`;
+  await consultarAPI(url, res);
 });
 
-// ✅ Página de status
+// 2️⃣ SERASA CPF 2025
+app.get("/apiserasacpf2025", async (req, res) => {
+  const { valor, cpf } = req.query;
+  const final = valor || cpf;
+  if (!final) return res.status(400).json({ status: "erro", mensagem: "Informe 'valor' ou 'cpf'." });
+  const url = `https://apiserasacpf2025.vercel.app/api?valor=${final}`;
+  await consultarAPI(url, res);
+});
+
+// 3️⃣ TEL CREDILINK 2025
+app.get("/apitelcredilink2025", async (req, res) => {
+  const { valor, telefone } = req.query;
+  const final = valor || telefone;
+  if (!final) return res.status(400).json({ status: "erro", mensagem: "Informe 'valor' ou 'telefone'." });
+  const url = `https://apitelcredilink2025.vercel.app/api?valor=${final}`;
+  await consultarAPI(url, res);
+});
+
+// 🔄 Rota genérica de fallback (usada pelo painel)
+app.get("/", async (req, res) => {
+  const { endpoint, valor, cpf, telefone } = req.query;
+  if (!endpoint)
+    return res.status(400).json({ status: "erro", mensagem: "Parâmetro 'endpoint' é obrigatório." });
+
+  const final = valor || cpf || telefone;
+  if (!final)
+    return res.status(400).json({ status: "erro", mensagem: "Informe 'valor', 'cpf' ou 'telefone'." });
+
+  const url = `https://${endpoint}.vercel.app/api?valor=${final}`;
+  await consultarAPI(url, res);
+});
+
+// 📡 Status
 app.get("/status", (req, res) => {
-  res.json({ status: "ok", versao: "Dark Aurora Proxy v2.8", hora: new Date().toISOString() });
+  res.json({
+    status: "online",
+    servidor: "Dark Aurora Proxy v2.8 — by nk",
+    hora: new Date().toISOString(),
+  });
 });
 
-// ✅ Inicializa o servidor
+// 🚀 Inicialização
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor Dark Aurora Proxy rodando na porta ${PORT}`);
+  console.log(`🚀 Servidor Dark Aurora Proxy v2.8 rodando na porta ${PORT}`);
 });
