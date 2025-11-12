@@ -6,6 +6,7 @@ import chalk from "chalk";
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// Cache local simples
 const cache = new Map();
 const CACHE_TEMPO = 30 * 1000;
 let contadorTotal = 0;
@@ -14,6 +15,7 @@ let inicioServidor = Date.now();
 app.use(cors());
 app.use(express.json());
 
+// Log colorido
 function logColorido(tipo, msg) {
   const hora = new Date().toLocaleTimeString("pt-BR");
   const base = chalk.gray(`[${hora}]`);
@@ -26,6 +28,7 @@ function logColorido(tipo, msg) {
   }
 }
 
+// Tratamento de resposta JSON
 async function parseJSONSafe(response) {
   try {
     return await response.json();
@@ -46,6 +49,7 @@ async function parseJSONSafe(response) {
   }
 }
 
+// Função principal de proxy
 async function consultarAPI(url, res) {
   contadorTotal++;
   try {
@@ -70,7 +74,7 @@ async function consultarAPI(url, res) {
   }
 }
 
-// ENDPOINTS
+// ENDPOINTS PRINCIPAIS
 app.get("/apirgcadsus", async (req, res) => {
   const { valor, rg } = req.query;
   const final = valor || rg;
@@ -92,6 +96,7 @@ app.get("/apitelcredilink2025", async (req, res) => {
   await consultarAPI(`https://apis-brasil.shop/apis/apitelcredilink2025.php?telefone=${final}`, res);
 });
 
+// ENDPOINT GENÉRICO
 app.get("/", async (req, res) => {
   const { endpoint, valor, cpf, telefone, rg } = req.query;
   const final = valor || cpf || telefone || rg;
@@ -112,6 +117,7 @@ app.get("/status", (req, res) => {
   res.json({
     status: "online",
     servidor: "Dark Aurora Proxy v3.6 — Painel Integrado",
+    dominio: "https://painel-dwib.onrender.com",
     uptime: Math.floor((Date.now() - inicioServidor) / 1000),
     cache_itens: cache.size,
     requisicoes_total: contadorTotal,
@@ -199,7 +205,7 @@ app.get("/monitor", (req, res) => {
       <div class="line"><span class="label">Requisições:</span> <span class="value">${contadorTotal}</span></div>
       <div class="line"><span class="label">Cache:</span> <span class="value">${cache.size} itens</span></div>
       <div class="line"><span class="label">Uptime:</span> <span class="value">${uptimeHoras}h ${uptimeMinutos % 60}m ${uptimeSegundos % 60}s</span></div>
-      <div class="line"><span class="label">Porta:</span> <span class="value">${PORT}</span></div>
+      <div class="line"><span class="label">Domínio:</span> <span class="value">painel-dwib.onrender.com</span></div>
       <button onclick="limparCache()">🧹 Limpar Cache</button>
       <p id="resposta" style="margin-top:10px;color:#b47aff;"></p>
     </div>
@@ -220,5 +226,5 @@ app.get("/monitor", (req, res) => {
 app.listen(PORT, () => {
   console.log(chalk.bgMagentaBright.bold("\n🌌 Dark Aurora Proxy v3.6 — Painel de Monitoramento Integrado — by nk"));
   console.log(chalk.cyan(`🚀 Servidor ativo na porta ${PORT}`));
-  console.log(chalk.gray("🔭 Painel disponível em: /monitor\n"));
+  console.log(chalk.gray("🔭 Painel disponível em: https://painel-dwib.onrender.com/monitor\n"));
 });
