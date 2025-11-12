@@ -5,58 +5,90 @@ import cors from "cors";
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// ✅ Habilita CORS
 app.use(cors());
 app.use(express.json());
 
-// URLs das APIs reais
-const apis = {
-  apiserasacpf2025: "https://apis-brasil.shop/apis/apiserasacpf2025.php",
-  apirgcadsus: "https://apis-brasil.shop/apis/apirgcadsus.php",
-  apitelcredilink2025: "https://apis-brasil.shop/apis/apitelcredilink2025.php",
-};
+// ✅ Logs de requisições
+app.use((req, res, next) => {
+  console.log(`📥 Nova requisição recebida: ${req.method} ${req.url}`);
+  next();
+});
 
-// Função para escolher a API conforme o parâmetro "endpoint"
-app.get("/", async (req, res) => {
+// ✅ Função auxiliar para tratar respostas que não são JSON
+async function parseJSONSafe(response) {
   try {
-    const { cpf, rg, telefone, endpoint } = req.query;
-
-    // Define a URL de destino
-    const baseUrl = apis[endpoint];
-    if (!baseUrl) {
-      return res.status(400).json({ erro: "Endpoint inválido ou não especificado." });
-    }
-
-    // Monta a URL completa de acordo com o tipo de consulta
-    let targetUrl = baseUrl;
-    if (cpf) targetUrl += `?cpf=${cpf}`;
-    else if (rg) targetUrl += `?rg=${rg}`;
-    else if (telefone) targetUrl += `?telefone=${telefone}`;
-    else return res.status(400).json({ erro: "Parâmetro de consulta ausente." });
-
-    // Faz a requisição à API original
-    const response = await fetch(targetUrl);
-
-    // Pega o texto original (para caso não seja JSON puro)
+    return await response.json();
+  } catch (e) {
     const text = await response.text();
-
-    // Tenta converter para JSON
-    try {
-      const json = JSON.parse(text);
-      return res.json(json);
-    } catch {
-      console.error("⚠️ Retorno não JSON:", text);
-      return res.status(200).json({
+    // Verifica se o conteúdo é HTML de erro 1033 ou similar
+    if (text.includes("1033") || text.includes("<html")) {
+      return {
         status: "erro",
-        mensagem: "A API de destino retornou texto não JSON.",
-        retorno_original: text,
-      });
+        mensagem: "A API de destino retornou uma página HTML (provável erro 1033 ou bloqueio).",
+        retorno_original: text.slice(0, 500) + "...",
+      };
     }
-  } catch (err) {
-    console.error("❌ Erro no proxy:", err);
-    return res.status(500).json({ erro: "Erro interno no servidor proxy." });
+    return {
+      status: "erro",
+      mensagem: "A API de destino retornou texto não JSON.",
+      retorno_original: text.slice(0, 500) + "...",
+    };
+  }
+}
+
+// ✅ Rota principal de proxy universal
+app.get("/", async (req, res) => {
+  const { cpf, valor, endpoint } = req.query;
+
+  if (!endpoint) {
+    return res.status(400).json({
+      status: "erro",
+      mensagem: "Parâmetro 'endpoint' é obrigatório.",
+    });
+  }
+
+  // 🔗 Monta URL da API real
+  let urlDestino;
+  if (cpf) {
+    urlDestino = `https://api-publica-externa.com/${endpoint}?cpf=${cpf}`;
+  } else if (valor) {
+    urlDestino = `https://api-publica-externa.com/${endpoint}?valor=${valor}`;
+  } else {
+    return res.status(400).json({
+      status: "erro",
+      mensagem: "Parâmetro 'cpf' ou 'valor' é obrigatório.",
+    });
+  }
+
+  console.log("🔹 Chamando endpoint:", urlDestino);
+
+  try {
+    const resposta = await fetch(urlDestino, {
+      headers: {
+        "User-Agent": "DarkAuroraProxy/1.0",
+      },
+      timeout: 20000, // 20 segundos
+    });
+
+    const data = await parseJSONSafe(resposta);
+    res.json(data);
+  } catch (erro) {
+    console.error("❌ Erro ao consultar API:", erro.message);
+    res.status(500).json({
+      status: "erro",
+      mensagem: "Erro interno ao conectar com a API de destino.",
+      detalhe: erro.message,
+    });
   }
 });
 
+// ✅ Página de status
+app.get("/status", (req, res) => {
+  res.json({ status: "ok", versao: "Dark Aurora Proxy v2.8", hora: new Date().toISOString() });
+});
+
+// ✅ Inicializa o servidor
 app.listen(PORT, () => {
-  console.log(`✅ Servidor proxy rodando na porta ${PORT}`);
+  console.log(`🚀 Servidor Dark Aurora Proxy rodando na porta ${PORT}`);
 });
