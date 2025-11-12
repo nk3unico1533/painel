@@ -44,11 +44,11 @@ app.get("/apitelcredilink2025", async (req, res) => {
   }
 });
 
-// 🟣 Consulta Placa
+// 🟣 Consulta Placa (corrigido para apiplacabvdetran.php)
 app.get("/apiplacacredlink2025", async (req, res) => {
   const { valor } = req.query;
   try {
-    const resposta = await fetch(`https://apis-brasil.shop/apis/apiplacacredlink2025.php?placa=${valor}`);
+    const resposta = await fetch(`https://apis-brasil.shop/apis/apiplacabvdetran.php?placa=${valor}`);
     const dados = await resposta.text();
     res.send(dados);
   } catch (erro) {
@@ -56,11 +56,11 @@ app.get("/apiplacacredlink2025", async (req, res) => {
   }
 });
 
-// 🟣 Consulta Nome
+// 🟣 Consulta Nome (corrigido para apiserasanome2025.php)
 app.get("/apinomecredlink2025", async (req, res) => {
   const { valor } = req.query;
   try {
-    const resposta = await fetch(`https://apis-brasil.shop/apis/apinomecredlink2025.php?nome=${valor}`);
+    const resposta = await fetch(`https://apis-brasil.shop/apis/apiserasanome2025.php?nome=${encodeURIComponent(valor)}`);
     const dados = await resposta.text();
     res.send(dados);
   } catch (erro) {
@@ -68,11 +68,11 @@ app.get("/apinomecredlink2025", async (req, res) => {
   }
 });
 
-// 🟣 Consulta E-mail
+// 🟣 Consulta E-mail (corrigido para apiserasaemail2025.php)
 app.get("/apiemailcredlink2025", async (req, res) => {
   const { valor } = req.query;
   try {
-    const resposta = await fetch(`https://apis-brasil.shop/apis/apiemailcredlink2025.php?email=${valor}`);
+    const resposta = await fetch(`https://apis-brasil.shop/apis/apiserasaemail2025.php?email=${encodeURIComponent(valor)}`);
     const dados = await resposta.text();
     res.send(dados);
   } catch (erro) {
