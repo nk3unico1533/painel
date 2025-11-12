@@ -1,48 +1,106 @@
+// =============================
+// Dark Aurora Consulta v2.8 — Proxy Server (atualizado: +placa, +nome, +email)
+// =============================
+
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
+const PORT = process.env.PORT || 10000;
+
+// CORS liberado para qualquer origem (ideal para testes e deploys estáticos)
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-
-// ===== Rotas Proxy =====
-app.get("/:tipo", async (req, res) => {
-  const { tipo } = req.params;
-  const { valor } = req.query;
-
-  if (!valor) {
-    return res.status(400).json({ erro: "Parâmetro 'valor' ausente." });
-  }
-
-  const urls = {
-    cpf: "https://apiserasacpf2025.vercel.app",
-    rg: "https://apirgcadsus.vercel.app",
-    telefone: "https://apitelcredilink2025.vercel.app",
-    nome: "https://apiserasacpf2025.vercel.app",
-    placa: "https://apirgcadsus.vercel.app",
-    email: "https://apitelcredilink2025.vercel.app"
-  };
-
-  const destino = urls[tipo];
-  if (!destino) {
-    return res.status(404).json({ erro: "Tipo de consulta inválido." });
-  }
-
+// =============================
+// Função proxy genérica
+// =============================
+async function proxyRequest(req, res, targetUrl) {
   try {
-    const response = await fetch(`${destino}?${tipo}=${encodeURIComponent(valor)}`);
+    const response = await fetch(targetUrl);
     const text = await response.text();
 
-    // Parser inteligente: extrai JSON mesmo se houver texto extra
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const jsonData = jsonMatch ? JSON.parse(jsonMatch[0]) : { erro: "Retorno inválido", retorno_original: text };
-
-    res.json(jsonData);
-  } catch (error) {
-    res.status(500).json({ erro: "Falha ao processar consulta", detalhe: error.message });
+    // Tenta converter o retorno em JSON
+    try {
+      const data = JSON.parse(text);
+      res.json(data);
+    } catch {
+      res.json({ erro: "Retorno inválido", retorno_original: text });
+    }
+  } catch (err) {
+    console.error("❌ Erro ao conectar com a API:", err);
+    res.status(500).json({ erro: "Erro ao conectar com a API" });
   }
+}
+
+// =============================
+// Rotas de proxy (Consultas Aurora)
+// =============================
+
+// 🔹 Consulta CPF
+app.get("/apiserasacpf2025", async (req, res) => {
+  const { valor } = req.query;
+  const url = `https://apiserasacpf2025.onrender.com/?cpf=${valor}`;
+  await proxyRequest(req, res, url);
 });
 
-app.listen(PORT, () => console.log(`✅ Servidor proxy ativo na porta ${PORT}`));
+// 🔹 Consulta RG
+app.get("/apirgcadsus", async (req, res) => {
+  const { valor } = req.query;
+  const url = `https://apirgcadsus.onrender.com/?rg=${valor}`;
+  await proxyRequest(req, res, url);
+});
+
+// 🔹 Consulta Telefone
+app.get("/apitelcredilink2025", async (req, res) => {
+  const { valor } = req.query;
+  const url = `https://apitelcredilink2025.onrender.com/?telefone=${valor}`;
+  await proxyRequest(req, res, url);
+});
+
+// 🔹 Consulta Placa (nova)
+app.get("/apiplacabvdetran", async (req, res) => {
+  const { valor } = req.query;
+  const url = `https://apis-brasil.shop/apis/apiplacabvdetran.php?placa=${valor}`;
+  await proxyRequest(req, res, url);
+});
+
+// 🔹 Consulta Nome (nova)
+app.get("/apiserasanome2025", async (req, res) => {
+  const { valor } = req.query;
+  const encoded = encodeURIComponent(valor);
+  const url = `https://apis-brasil.shop/apis/apiserasanome2025.php?nome=${encoded}`;
+  await proxyRequest(req, res, url);
+});
+
+// 🔹 Consulta E-mail (nova)
+app.get("/apiserasaemail2025", async (req, res) => {
+  const { valor } = req.query;
+  const encoded = encodeURIComponent(valor);
+  const url = `https://apis-brasil.shop/apis/apiserasaemail2025.php?email=${encoded}`;
+  await proxyRequest(req, res, url);
+});
+
+// =============================
+// Página inicial / Monitoramento
+// =============================
+app.get("/", (req, res) => {
+  res.send("✅ Dark Aurora Consulta v2.8 — Servidor proxy ativo e funcional.");
+});
+
+app.get("/monitor", (req, res) => {
+  res.json({
+    status: "online",
+    versao: "2.8",
+    servidor: "Render Proxy Estável",
+    autor: "nk"
+  });
+});
+
+// =============================
+// Inicialização
+// =============================
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor proxy ativo na porta ${PORT}`);
+});
