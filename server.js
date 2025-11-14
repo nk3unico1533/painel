@@ -11,7 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 // Base oficial das APIs
-const API_BASE = "https://apis-brasil.shop/apis/";
+const API_BASE = "https://painel-dwib.onrender.com/";
 
 // Função genérica para proxiar requisições
 async function proxy(req, res, endpoint) {
