@@ -155,4 +155,4 @@ app.get('/', (req, res) => res.send('Dark Aurora - API Proxy ONLINE'));
 
 app.listen(PORT, () => {
   console.log(`Dark Aurora proxy listening on port ${PORT}`);
-});
+}); 
