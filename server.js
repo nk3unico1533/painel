@@ -1,144 +1,158 @@
-// Dark Aurora — server.js v3.0 (Full Proxy)
-// by nk
-// Totalmente compatível com Render + script.js atualizado
+// server.js — Express proxy for Dark Aurora (fixed concatenation, routes mapping, basic timeouts)
+// Designed to be deployed on Render (or any Node host). For each frontend path we proxy to apis-brasil.shop/apis/<file>.
+// Keep this file as-is and deploy to your Render instance (painel-dwib.onrender.com).
 
-import express from "express";
-import fetch from "node-fetch";
-import cors from "cors";
-
+const express = require('express');
+const fetch = global.fetch || require('node-fetch');
 const app = express();
-app.use(cors());
-app.use(express.json());
+const PORT = process.env.PORT || 3000;
+const TIMEOUT_MS = 20000; // 20s
 
-// Base oficial das APIs
-const API_BASE = "https://painel-dwib.onrender.com/";
+// Upstream base
+const UPSTREAM = 'https://apis-brasil.shop/apis';
 
-// Função genérica para proxiar requisições
-async function proxy(req, res, endpoint) {
+// Helper to proxy a single upstream URL and stream response text
+async function proxyUpstream(res, upstreamUrl) {
   try {
-    const response = await fetch(`${API_BASE}${endpoint}`);
-    const text = await response.text();
-
-    // tentar JSON, se não for, devolver texto mesmo
-    try {
-      return res.json(JSON.parse(text));
-    } catch {
-      return res.send(text);
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const resp = await fetch(upstreamUrl, { signal: controller.signal });
+    clearTimeout(id);
+    const text = await resp.text();
+    // forward status and content-type if possible
+    const contentType = resp.headers.get('content-type') || 'text/plain; charset=utf-8';
+    res.set('content-type', contentType);
+    return res.status(200).send(text);
+  } catch (err) {
+    console.error('proxyUpstream error for', upstreamUrl, err && err.message ? err.message : err);
+    if (err.name === 'AbortError') {
+      return res.status(504).send(`{"error":"upstream timeout","details":"${upstreamUrl}"}`);
     }
-  } catch (error) {
-    console.error("Proxy Error:", error);
-    return res.status(500).json({ error: "Erro no proxy.", details: error.message });
+    return res.status(502).send(`{"error":"upstream fetch failed","details":"${upstreamUrl}"}`);
   }
 }
 
-// -----------------------------------------------------------
-// CPF — Full
-app.get("/cpf/full", (req, res) => {
-  const cpf = req.query.cpf || "";
-  proxy(req, res, `apiserasacpf2025.php?cpf=${cpf}`);
+// Safety: always add CORS for your frontend domains (allow all for now)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
 });
 
-// CPF — Hard
-app.get("/cpf/hard", (req, res) => {
-  const cpf = req.query.cpf || "";
-  proxy(req, res, `apicpfcredilink2025.php?cpf=${cpf}`);
+// --- Routes mapping ---
+// CPF routes
+app.get('/cpf/full', async (req, res) => {
+  const cpf = req.query.cpf || req.query.valor || '';
+  if (!cpf) return res.status(400).send('{"error":"missing cpf"}');
+  const upstream = `${UPSTREAM}/apiserasacpf2025.php?cpf=${encodeURIComponent(cpf)}`;
+  return proxyUpstream(res, upstream);
+});
+app.get('/cpf/hard', async (req, res) => {
+  const cpf = req.query.cpf || '';
+  if (!cpf) return res.status(400).send('{"error":"missing cpf"}');
+  const upstream = `${UPSTREAM}/apicpfcredilink2025.php?cpf=${encodeURIComponent(cpf)}`;
+  return proxyUpstream(res, upstream);
+});
+app.get('/cpf/low', async (req, res) => {
+  const cpf = req.query.cpf || '';
+  if (!cpf) return res.status(400).send('{"error":"missing cpf"}');
+  const upstream = `${UPSTREAM}/apicpfdatasus.php?cpf=${encodeURIComponent(cpf)}`;
+  return proxyUpstream(res, upstream);
+});
+app.get('/cpf/detran', async (req, res) => {
+  const cpf = req.query.cpf || '';
+  if (!cpf) return res.status(400).send('{"error":"missing cpf"}');
+  const upstream = `${UPSTREAM}/apicpfbvdetran.php?cpf=${encodeURIComponent(cpf)}`;
+  return proxyUpstream(res, upstream);
+});
+app.get('/cpf/35m', async (req, res) => {
+  const cpf = req.query.cpf || '';
+  if (!cpf) return res.status(400).send('{"error":"missing cpf"}');
+  const upstream = `${UPSTREAM}/apicpf35rais2019.php?cpf=${encodeURIComponent(cpf)}`;
+  return proxyUpstream(res, upstream);
+});
+app.get('/cpf/cnpj', async (req, res) => {
+  const cnpj = req.query.cnpj || '';
+  if (!cnpj) return res.status(400).send('{"error":"missing cnpj"}');
+  const upstream = `${UPSTREAM}/apicnpj35rais2019.php?cnpj=${encodeURIComponent(cnpj)}`;
+  return proxyUpstream(res, upstream);
 });
 
-// CPF — Low
-app.get("/cpf/low", (req, res) => {
-  const cpf = req.query.cpf || "";
-  proxy(req, res, `apicpfdatasus.php?cpf=${cpf}`);
+// RG
+app.get('/rg', async (req, res) => {
+  const rg = req.query.rg || '';
+  if (!rg) return res.status(400).send('{"error":"missing rg"}');
+  const upstream = `${UPSTREAM}/apirgcadsus.php?rg=${encodeURIComponent(rg)}`;
+  return proxyUpstream(res, upstream);
 });
 
-// CPF — DETRAN (9 dígitos)
-app.get("/cpf/detran", (req, res) => {
-  const cpf = req.query.cpf || "";
-  proxy(req, res, `apicpfbvdetran.php?cpf=${cpf}`);
+// Telefone (multiple)
+app.get('/telefone/full', async (req, res) => {
+  const tel = req.query.telefone || req.query.valor || '';
+  if (!tel) return res.status(400).send('{"error":"missing telefone"}');
+  const upstream = `${UPSTREAM}/apitelcredilink2025.php?telefone=${encodeURIComponent(tel)}`;
+  return proxyUpstream(res, upstream);
+});
+app.get('/telefone/hard10', async (req, res) => {
+  const tel = req.query.telefone || '';
+  if (!tel) return res.status(400).send('{"error":"missing telefone"}');
+  const upstream = `${UPSTREAM}/apitel43malgar.php?ddd=${encodeURIComponent(req.query.ddd||'')}&telefone=${encodeURIComponent(tel)}`;
+  return proxyUpstream(res, upstream);
+});
+app.get('/telefone/low10', async (req, res) => {
+  const tel = req.query.telefone || '';
+  if (!tel) return res.status(400).send('{"error":"missing telefone"}');
+  const upstream = `${UPSTREAM}/apitel1cadsus.php?telefone=${encodeURIComponent(tel)}`;
+  return proxyUpstream(res, upstream);
+});
+app.get('/telefone/op1', async (req, res) => {
+  const tel = req.query.telefone || '';
+  if (!tel) return res.status(400).send('{"error":"missing telefone"}');
+  const upstream = `${UPSTREAM}/apitel2cadsus.php?telefone2=${encodeURIComponent(tel)}`;
+  return proxyUpstream(res, upstream);
+});
+app.get('/telefone/op2', async (req, res) => {
+  const tel = req.query.telefone || '';
+  if (!tel) return res.status(400).send('{"error":"missing telefone"}');
+  const upstream = `${UPSTREAM}/apitel3cadsus.php?telefone3=${encodeURIComponent(tel)}`;
+  return proxyUpstream(res, upstream);
 });
 
-// CPF — 35M
-app.get("/cpf/35m", (req, res) => {
-  const cpf = req.query.cpf || "";
-  proxy(req, res, `apicpf35rais2019.php?cpf=${cpf}`);
+// Placa
+app.get('/placa', async (req, res) => {
+  const placa = req.query.placa || '';
+  if (!placa) return res.status(400).send('{"error":"missing placa"}');
+  const upstream = `${UPSTREAM}/apiplacabvdetran.php?placa=${encodeURIComponent(placa)}`;
+  return proxyUpstream(res, upstream);
 });
 
-// CNPJ (35M)
-app.get("/cpf/cnpj", (req, res) => {
-  const cnpj = req.query.cnpj || "";
-  proxy(req, res, `apicnpj35rais2019.php?cnpj=${cnpj}`);
+// Nome
+app.get('/nome/op1', async (req, res) => {
+  const nome = req.query.nome || '';
+  if (!nome) return res.status(400).send('{"error":"missing nome"}');
+  const upstream = `${UPSTREAM}/apiserasanome2025.php?nome=${encodeURIComponent(nome)}`;
+  return proxyUpstream(res, upstream);
+});
+app.get('/nome/op2', async (req, res) => {
+  const nome = req.query.nome || '';
+  if (!nome) return res.status(400).send('{"error":"missing nome"}');
+  const upstream = `${UPSTREAM}/apinomefotoma.php?nome=${encodeURIComponent(nome)}`;
+  return proxyUpstream(res, upstream);
 });
 
-// -----------------------------------------------------------
-// RG — padrão
-app.get("/rg", (req, res) => {
-  const rg = req.query.rg || "";
-  proxy(req, res, `apirgcadsus.php?rg=${rg}`);
+// Email
+app.get('/email', async (req, res) => {
+  const email = req.query.email || '';
+  if (!email) return res.status(400).send('{"error":"missing email"}');
+  const upstream = `${UPSTREAM}/apiserasaemail2025.php?email=${encodeURIComponent(email)}`;
+  return proxyUpstream(res, upstream);
 });
 
-// -----------------------------------------------------------
-// TELEFONE — Full
-app.get("/telefone/full", (req, res) => {
-  const tel = req.query.telefone || "";
-  proxy(req, res, `apitelcredilink2025.php?telefone=${tel}`);
-});
+// Health check
+app.get('/', (req, res) => res.send('Dark Aurora - API Proxy ONLINE'));
 
-// TELEFONE — Hard 10 dígitos
-app.get("/telefone/hard10", (req, res) => {
-  const tel = req.query.telefone || "";
-  const ddd = tel.slice(0, 2);
-  const numero = tel.slice(2);
-  proxy(req, res, `apitel43malgar.php?ddd=${ddd}&telefone=${numero}`);
+app.listen(PORT, () => {
+  console.log(`Dark Aurora proxy listening on port ${PORT}`);
 });
-
-// TELEFONE — Low 10 dígitos
-app.get("/telefone/low10", (req, res) => {
-  const tel = req.query.telefone || "";
-  proxy(req, res, `apitel1cadsus.php?telefone=${tel}`);
-});
-
-// TELEFONE — Opção 1 (10 dígitos)
-app.get("/telefone/op1", (req, res) => {
-  const tel = req.query.telefone || "";
-  proxy(req, res, `apitel2cadsus.php?telefone2=${tel}`);
-});
-
-// TELEFONE — Opção 2 (10 dígitos)
-app.get("/telefone/op2", (req, res) => {
-  const tel = req.query.telefone || "";
-  proxy(req, res, `apitel3cadsus.php?telefone3=${tel}`);
-});
-
-// -----------------------------------------------------------
-// PLACA
-app.get("/placa", (req, res) => {
-  const placa = req.query.placa || "";
-  proxy(req, res, `apiplacabvdetran.php?placa=${placa}`);
-});
-
-// -----------------------------------------------------------
-// NOME — Opção 1
-app.get("/nome/op1", (req, res) => {
-  const nome = req.query.nome || "";
-  proxy(req, res, `apiserasanome2025.php?nome=${nome}`);
-});
-
-// NOME — Opção 2
-app.get("/nome/op2", (req, res) => {
-  const nome = req.query.nome || "";
-  proxy(req, res, `apinomefotoma.php?nome=${nome}`);
-});
-
-// -----------------------------------------------------------
-// EMAIL
-app.get("/email", (req, res) => {
-  const email = req.query.email || "";
-  proxy(req, res, `apiserasaemail2025.php?email=${email}`);
-});
-
-// -----------------------------------------------------------
-app.get("/", (req, res) => {
-  res.send("Dark Aurora - API Proxy ONLINE ✔");
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server ON → Porta ${PORT}`));
