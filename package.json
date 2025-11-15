@@ -1,5 +1,5 @@
 {
-  "name": "dark-aurora-server",
+  "name": "painel",
   "version": "1.0.0",
   "description": "Proxy server for Dark Aurora with rate-limiting, IP block, caching and admin dashboard",
   "main": "server.js",
