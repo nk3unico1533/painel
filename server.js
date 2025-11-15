@@ -1,17 +1,6 @@
-// server.js - Dark Aurora enhanced server for Render (Real-time dashboard + rate-limit + IP block + logs)
-/*
-  Features:
-  - Express server with security (helmet), compression, CORS
-  - Rate limiting: 120 req/min per IP on /api/*
-  - Slowdown (anti-flood)
-  - Automatic IP blocking for repeat flooders (configurable TTL)
-  - Request logging to ./logs/log.txt via morgan
-  - Simple caching with node-cache
-  - Proxy routes for /api/cpf/full, /api/rg, /api/telefone/full, /api/placa
-  - Real-time dashboard via socket.io at /dashboard (serves HTML + websocket)
-  - Clean upstream owner notices from proxied responses
-  - Configurable via environment variables
-*/
+// server.js - Dark Aurora enhanced server for Render (Real-time dashboard + rate-limit + IP block + logs + admin)
+// Features: rate-limit, automatic IP blocking, logs, cache, dashboard, admin endpoints to block/unblock IPs
+// Protect admin actions with ADMIN_TOKEN env variable (set in Render). Send header 'x-admin-token': ADMIN_TOKEN
 
 const fs = require('fs');
 const path = require('path');
@@ -36,8 +25,9 @@ const SLOW_WINDOW_MS = parseInt(process.env.SLOW_WINDOW_MS || '60000');
 const SLOW_DELAY_AFTER = parseInt(process.env.SLOW_DELAY_AFTER || '40');
 const SLOW_DELAY_MS = parseInt(process.env.SLOW_DELAY_MS || '200'); // ms per request after threshold
 const CACHE_TTL_SEC = parseInt(process.env.CACHE_TTL_SEC || '300');
-const LOG_PATH = path.join(__dirname, 'logs', 'log.txt'); // user chose 1-A
-const IP_BLOCK_TTL_MS = parseInt(process.env.IP_BLOCK_TTL_MS || String(2 * 60 * 1000)); // 2 minutes default per choice 2-A
+const LOG_PATH = path.join(__dirname, 'logs', 'log.txt');
+const IP_BLOCK_TTL_MS = parseInt(process.env.IP_BLOCK_TTL_MS || String(2 * 60 * 1000)); // 2 minutes
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'changeme'; // set a secure token in production
 
 // Ensure logs dir exists
 const logDir = path.join(__dirname, 'logs');
@@ -93,7 +83,6 @@ let lastMinuteCount = 0;
 setInterval(()=>{
   lastMinuteCount = requestsThisMinute;
   requestsThisMinute = 0;
-  // emit stats
   io.emit('stats', { totalRequests, lastMinuteCount, blocked: Array.from(blockedIPs.keys()) });
 }, 60*1000);
 
@@ -145,14 +134,10 @@ function recordRequest(ip){
   if(!ipBuckets.has(ip)) ipBuckets.set(ip, []);
   const arr = ipBuckets.get(ip);
   arr.push(now);
-  // keep only recent timestamps within shortWindowMs
   while(arr.length && (now - arr[0]) > shortWindowMs) arr.shift();
   if(arr.length > burstThreshold){
-    // block IP
     blockedIPs.set(ip, Date.now() + IP_BLOCK_TTL_MS);
-    // clear bucket
     ipBuckets.delete(ip);
-    // log
     const reason = `Auto-blocked ${ip} for burst (${arr.length} req in ${shortWindowMs/1000}s)`;
     const line = `[${new Date().toISOString()}] ${reason}\n`;
     fs.appendFileSync(LOG_PATH, line);
@@ -209,6 +194,53 @@ app.get('/api/health', (req,res)=> res.json({ ok:true, ts: Date.now() }));
 // serve dashboard static file + socket.io events
 app.get('/dashboard', (req,res)=>{
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// endpoint to read recent log lines (public read)
+app.get('/api/_recent_logs', (req,res)=>{
+  try{
+    if(!fs.existsSync(LOG_PATH)) return res.status(200).send('');
+    const data = fs.readFileSync(LOG_PATH,'utf8').trim().split('\\n');
+    res.type('text/plain').send(data.slice(-200).join('\\n'));
+  }catch(e){
+    res.status(500).send('');
+  }
+});
+
+// ADMIN endpoints - require ADMIN_TOKEN via header x-admin-token
+function requireAdmin(req,res,next){
+  const token = req.headers['x-admin-token'] || req.query.admin_token || '';
+  if(!ADMIN_TOKEN || token !== ADMIN_TOKEN){
+    return res.status(403).json({ error: 'admin_auth_required' });
+  }
+  next();
+}
+
+// list blocked IPs
+app.get('/api/admin/blocked', requireAdmin, (req,res)=>{
+  const items = Array.from(blockedIPs.entries()).map(([ip,expiry])=>({ ip, blockedUntil: expiry }));
+  res.json({ blocked: items });
+});
+
+// unblock IP
+app.post('/api/admin/unblock', requireAdmin, (req,res)=>{
+  const ip = req.body.ip || req.query.ip;
+  if(!ip) return res.status(400).json({ error: 'ip_required' });
+  blockedIPs.delete(ip);
+  fs.appendFileSync(LOG_PATH, `[${new Date().toISOString()}] Admin unblocked ${ip}\n`);
+  io.emit('stats', { totalRequests, lastMinuteCount, blocked: Array.from(blockedIPs.keys()) });
+  res.json({ ok: true, ip });
+});
+
+// block IP manually
+app.post('/api/admin/block', requireAdmin, (req,res)=>{
+  const ip = req.body.ip || req.query.ip;
+  const ms = parseInt(req.body.ttl_ms || req.query.ttl_ms || String(IP_BLOCK_TTL_MS));
+  if(!ip) return res.status(400).json({ error: 'ip_required' });
+  blockedIPs.set(ip, Date.now() + ms);
+  fs.appendFileSync(LOG_PATH, `[${new Date().toISOString()}] Admin blocked ${ip} for ${ms}ms\n`);
+  io.emit('stats', { totalRequests, lastMinuteCount, blocked: Array.from(blockedIPs.keys()) });
+  res.json({ ok: true, ip, ttl_ms: ms });
 });
 
 // socket.io realtime updates: send stats on connection and periodically
